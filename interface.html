@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arrow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="interface.css">
+  <script src="interface.js" defer></script>
+</head>
+<body class="container py-4">
+  <h2 class="text-center mb-4">Task-based Dynamic Filtering of the Web</h2>
+  <div class="form-group">
+    <label for="taskInput">What can I help you with?</label>
+    <input type="text" id="taskInput" class="form-control" placeholder="Eg. Find me boots for hiking.">
+  </div>
+  <button id="processTask" class="btn btn-primary btn-block">Start task</button>
+  <button id="completeTask" class="btn btn-success btn-block" style="display: none;">Task completed!</button>
+  <p id="status" class="text-center"></p>
+</body>
+</html>
