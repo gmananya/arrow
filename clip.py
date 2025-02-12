@@ -1,52 +1,63 @@
+import json
+import requests
+from flask_cors import CORS
+from PIL import Image
+from transformers import CLIPProcessor, CLIPModel
 from flask import Flask, request, jsonify
 import torch
-from PIL import Image
-import requests
 from io import BytesIO
-from transformers import CLIPProcessor, CLIPModel
 
 app = Flask(__name__)
+CORS(app)  
 
-# Load CLIP model and processor
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
+DEVICE = "cpu"
+
+model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(DEVICE)
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-def get_clip_score(image_url, text_query):
-    try:
-        # Download and preprocess the image
-        response = requests.get(image_url)
-        image = Image.open(BytesIO(response.content))
+@app.route("/process_visuals", methods=["POST"])
+def process_visuals():
+    data = request.get_json()
+    task = data.get("task", "")
+    images = data.get("images", [])
+    iframes = data.get("iframes", [])
+    svg = data.get("svg", [])
+    print("Received data:", task, len(images), len(iframes), len(svg))
 
-        # Tokenize text and process image
-        inputs = processor(text=[text_query], images=image, return_tensors="pt", padding=True)
-        inputs = {key: value.to(device) for key, value in inputs.items()}
+    all_visuals = images + iframes + svg
+    if not all_visuals:
+        return jsonify({"error": "No images or iframes provided"}), 400
 
-        # Compute similarity score
-        with torch.no_grad():
-            outputs = model(**inputs)
-            image_features = outputs.image_embeds
-            text_features = outputs.text_embeds
-            score = torch.cosine_similarity(image_features, text_features).item()
+    # computing CLIP scores
+    scores = get_clip_scores(task, all_visuals)
+    return jsonify({"visual_scores": scores})
 
-        return score
-    except Exception as e:
-        print("Error processing image:", e)
-        return None
+def get_clip_scores(task, image_urls):
+    """ Compute CLIP similarity scores between task description and images """
+    text_inputs = processor(text=[task], return_tensors="pt", padding=True, truncation=True).to(DEVICE)
 
-@app.route("/clip-score", methods=["POST"])
-def clip_score():
-    data = request.json
-    task = data.get("task")
-    image_urls = data.get("images", [])
-    
-    results = {}
-    for img_url in image_urls:
-        score = get_clip_score(img_url, task)
-        if score is not None:
-            results[img_url] = score
+    with torch.no_grad():
+        text_features = model.get_text_features(**text_inputs)
+        text_features /= text_features.norm(dim=-1, keepdim=True)
 
-    return jsonify(results)
+    scores = []
+    for url in image_urls:
+        try:
+            response = requests.get(url, timeout=5)
+            image = Image.open(BytesIO(response.content)).convert("RGB")
+            image_inputs = processor(images=image, return_tensors="pt").to(DEVICE)
+
+            with torch.no_grad():
+                image_features = model.get_image_features(**image_inputs)
+                image_features /= image_features.norm(dim=-1, keepdim=True)
+                score = (image_features @ text_features.T).squeeze().item()
+
+            scores.append({"url": url, "clip_score": score})
+        except Exception as e:
+            print(f"Error processing {url}: {e}")
+            scores.append({"url": url, "clip_score": 0})
+
+    return scores
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5001, debug=True)
