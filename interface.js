@@ -1,37 +1,63 @@
-document.getElementById("processTask").addEventListener("click", async () => {
-    const task = document.getElementById("taskInput").value.trim();
+document.addEventListener("DOMContentLoaded", () => {
+    const displayStyleSelect = document.getElementById('displayStyle');
+    const relevanceSliderContainer = document.getElementById('relevanceSliderContainer');
+    const relevanceThreshold = document.getElementById('relevanceThreshold');
+    const relevanceValue = document.getElementById('relevanceValue');
+    let startTaskButton = document.getElementById('startTask');
 
-    if (!task) {
-        document.getElementById("status").innerText = "Please enter the task you'd like to do!";
-        return;
+    displayStyleSelect.addEventListener('change', function() {
+        if (this.value === 'task-specific') {
+            relevanceSliderContainer.classList.remove('hidden');
+        } else {
+            relevanceSliderContainer.classList.add('hidden');
+        }
+    });
+    
+    relevanceThreshold.addEventListener('input', function() {
+        relevanceValue.textContent = this.value;
+    });
+
+    startTaskButton.addEventListener('click', () => {
+        let taskInput = document.getElementById("taskUpdate").value.trim();
+        if (taskInput === "") return;
+        
+        displayTask(taskInput);
+        
+        chrome.runtime.sendMessage({ message: 'taskUpdate', data: taskInput }, (response) => {
+            console.log('Popup received response:', response.reply);
+        });
+
+        startTaskButton.innerText = "Update task";
+    });
+       
+    document.getElementById('completeTask').addEventListener('click', () => {
+        completeTask();
+    });
+
+})
+
+function displayTask(taskText) {
+    let taskList = document.getElementById("taskList");
+
+    let taskBox = document.createElement("div");
+    taskBox.className = "task-box";
+    taskBox.innerText = taskText;
+
+    taskList.appendChild(taskBox);
+    document.getElementById("taskUpdate").value = "";
+
+    if (taskList.children.length === 1) {
+        document.getElementById("userTaskLabel").classList.remove("hidden");
+        document.getElementById("addTaskLabel").innerText = "Add task updates!";
     }
 
-    chrome.storage.local.set({ activeTask: task }, () => {
-        console.log("Task saved:", task);
-    });
+    document.getElementById("completeTask").classList.remove("hidden");
+}
 
-    document.getElementById("completeTask").style.display = "block";
-
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs.length === 0) return;
-
-        chrome.tabs.sendMessage(tabs[0].id, { action: "modifyPage", task }, (response) => {
-            document.getElementById("status").innerText = response?.message || "Processing...";
-        });
-    });
-});
-
-document.getElementById("completeTask").addEventListener("click", async () => {
-    chrome.storage.local.remove("activeTask", () => {
-        console.log("Task removed");
-    });
-
+function completeTask() {
     document.getElementById("status").innerText = "Task completed!";
-    document.getElementById("completeTask").style.display = "none";
-
-    chrome.runtime.sendMessage({ action: "closeTaskWindow" });
-});
-
-
-
-
+    
+    setTimeout(() => {
+        window.close();
+    }, 500);
+}
